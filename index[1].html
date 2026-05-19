@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gary Jones Chiropractic — Practice Manager</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#1B3A6B;--navy2:#2D5282;--navy-pale:#EBF4FF;
+  --green-pale:#F0FFF4;--green-border:#9AE6B4;--green-text:#276749;
+  --amber-pale:#FFFBEB;--amber-text:#975A16;
+  --red-pale:#FFF5F5;--red-border:#FC8181;--red-text:#C53030;
+  --bg:#F7F8FA;--surface:#fff;--border:#E2E8F0;--border2:#EDF2F7;
+  --text:#1A202C;--muted:#718096;--light:#A0AEC0;
+  --r:8px;--rl:12px;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
+input,textarea,select{font-family:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);width:100%;outline:none;transition:border-color .15s,box-shadow .15s}
+input:focus,textarea:focus,select:focus{border-color:var(--navy);box-shadow:0 0 0 3px rgba(27,58,107,.08)}
+textarea{resize:vertical;line-height:1.6}
+label{font-size:13px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px}
+button{font-family:inherit;cursor:pointer;transition:all .15s}
+.btn{background:var(--navy);color:#fff;border:none;border-radius:var(--r);padding:9px 18px;font-size:14px;font-weight:500}
+.btn:hover:not(:disabled){background:var(--navy2)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-o{background:transparent;color:var(--text);border:1px solid var(--border);border-radius:var(--r);padding:9px 18px;font-size:14px}
+.btn-o:hover{background:var(--bg)}
+.btn-sm{padding:5px 12px;font-size:13px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem}
+.f{margin-bottom:1rem}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.sec{font-size:11px;font-weight:600;color:var(--light);text-transform:uppercase;letter-spacing:.07em;padding-bottom:8px;border-bottom:1px solid var(--border2);margin-bottom:14px}
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:12px;font-weight:500}
+.b-bl{background:var(--navy-pale);color:var(--navy)}
+.b-gr{background:var(--green-pale);color:var(--green-text)}
+.b-am{background:var(--amber-pale);color:var(--amber-text)}
+.b-re{background:var(--red-pale);color:var(--red-text)}
+.ptrow{padding:11px 16px;border-bottom:1px solid var(--border2);cursor:pointer;display:flex;align-items:center;gap:12px;transition:background .1s}
+.ptrow:hover{background:var(--bg)}
+.ni{padding:8px 12px;border-radius:var(--r);cursor:pointer;font-size:14px;display:flex;align-items:center;gap:9px;transition:background .1s;color:rgba(255,255,255,.65);margin-bottom:2px}
+.ni:hover,.ni.on{background:rgba(255,255,255,.13);color:#fff}
+.cr{padding:8px 10px;border-radius:var(--r);border:1px solid var(--border);display:flex;align-items:center;gap:9px;cursor:pointer;margin-bottom:6px;transition:background .1s}
+.cr:hover{background:var(--bg)}
+.cr.on{background:var(--green-pale);border-color:var(--green-border)}
+.fr{padding:8px 10px;border-radius:var(--r);border:1px solid var(--border);display:flex;align-items:flex-start;gap:9px;cursor:pointer;margin-bottom:6px}
+.fr.on{background:var(--red-pale);border-color:var(--red-border)}
+.nc{padding:12px 14px;border:1px solid var(--border);border-radius:var(--r);cursor:pointer;margin-bottom:8px;transition:background .1s}
+.nc:hover{background:var(--bg)}
+.prog{height:4px;border-radius:2px;background:var(--border);margin-bottom:16px}
+.progf{height:4px;border-radius:2px;background:var(--navy);transition:width .3s}
+.toast{position:fixed;bottom:24px;right:24px;background:#1A202C;color:#fff;padding:12px 18px;border-radius:var(--r);font-size:14px;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none}
+.toast.show{opacity:1}
+.sync-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+.sync-dot.ok{background:#48BB78}
+.sync-dot.busy{background:#ECC94B;animation:pulse 1s infinite}
+.sync-dot.err{background:#FC8181}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+</style>
+</head>
+<body>
+<div id="app"><div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#718096;font-size:15px">Loading...</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const CLIENT_ID='985533250479-6blqnnqshi8fkf1b41f0dg99nde48hs7.apps.googleusercontent.com';
+const SCOPES='https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
+const SHEET_NAME='GJC_Practice_Manager';
+const P_HEADERS=['id','patientNumber','name','preferredName','email','phone','address','dob','sex','referral','gp','gpPhone','medAlert','occupation','employer','emergencyName','emergencyPhone','emergencyRel','joined','lastVisit'];
+const N_HEADERS=['id','patientId','date','type','synopsis','s_complaint','s_history','s_pain','s_flags','o_posture','o_rom','o_palpation','o_steps','a_impression','a_differential','p_treatment','p_exercises','p_education','p_followup'];
+const RED_FLAGS=[{id:'bowel',label:'Bowel or bladder dysfunction',critical:true},{id:'weakness',label:'Unexplained muscle weakness',critical:true},{id:'constitutional',label:'Constitutional symptoms (fever, weight loss, night sweats)',critical:true},{id:'saddle',label:'Saddle anaesthesia',critical:true},{id:'malignancy',label:'History of malignancy',critical:true},{id:'trauma',label:'Recent significant trauma',critical:false},{id:'age50',label:'First episode of back pain over age 50',critical:false}];
+const STEPS=['Feet and ankles','Knees','Hips','Sacrum and coccyx','Lumbar (L1–L5)','Thoracolumbar junction','Mid-thoracic','Cervicothoracic junction','Cervical (C1–C7)','Occiput and atlas','Pelvis and SI joints','Final alignment check'];
+const EXERCISES=[{id:'abc',label:'ABC — neck mobility'},{id:'wagging',label:'Wagging dog — spinal mobility'},{id:'shuffle',label:'Shoulder shuffle — thoracic'},{id:'rotation',label:'Body rotation — torso'}];
+
+// ── STATE ─────────────────────────────────────────────────────────
+let tokenClient, accessToken=null, userInfo=null, spreadsheetId=null, syncStatus='idle';
+let appState={patients:[],screen:'patients',sub:null,selected:null,viewNote:null};
+
+// ── UTILS ─────────────────────────────────────────────────────────
+function age(dob){if(!dob)return'';const d=new Date(dob),n=new Date();let a=n.getFullYear()-d.getFullYear();if(n<new Date(n.getFullYear(),d.getMonth(),d.getDate()))a--;return a;}
+function initials(n){return(n||'?').split(' ').map(w=>w[0]||'').join('').slice(0,2).toUpperCase();}
+function fmtDate(s){if(!s)return'';const d=new Date(s);return isNaN(d)?s:d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});}
+function uid(){return Date.now()+'-'+Math.random().toString(36).slice(2,7);}
+function initNote(){return{id:uid(),date:new Date().toISOString().split('T')[0],type:'',synopsis:'',s:{complaint:'',history:'',pain:5,flags:[]},o:{posture:'',rom:'',palpation:'',steps:[]},a:{impression:'',differential:''},p:{treatment:'',exercises:[],education:'',followup:''}};}
+
+function toast(msg,duration=3000){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),duration);
+}
+
+// ── GOOGLE SHEETS API ────────────────────────────────────────────
+async function gSheets(method,path,body){
+  const r=await fetch(`https://sheets.googleapis.com/v4/spreadsheets${path}`,{
+    method,headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},
+    body:body?JSON.stringify(body):undefined
+  });
+  if(!r.ok){const e=await r.json();throw new Error(e.error?.message||r.status);}
+  return r.json();
+}
+
+async function gDrive(method,path,body){
+  const r=await fetch(`https://www.googleapis.com/drive/v3${path}`,{
+    method,headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},
+    body:body?JSON.stringify(body):undefined
+  });
+  if(!r.ok){const e=await r.json();throw new Error(e.error?.message||r.status);}
+  return r.json();
+}
+
+async function findOrCreateSheet(){
+  // Check localStorage first
+  const saved=localStorage.getItem('gjc_sheet_id');
+  if(saved){
+    try{await gSheets('GET','/'+saved+'?fields=spreadsheetId');spreadsheetId=saved;return;}
+    catch(e){localStorage.removeItem('gjc_sheet_id');}
+  }
+  // Search Drive for existing sheet
+  const search=await gDrive('GET','/files?q=name%3D%22'+SHEET_NAME+'%22+and+mimeType%3D%22application%2Fvnd.google-apps.spreadsheet%22+and+trashed%3Dfalse&fields=files(id,name)');
+  if(search.files&&search.files.length>0){
+    spreadsheetId=search.files[0].id;
+    localStorage.setItem('gjc_sheet_id',spreadsheetId);
+    return;
+  }
+  // Create new spreadsheet
+  const created=await gSheets('POST','',{
+    properties:{title:SHEET_NAME},
+    sheets:[{properties:{title:'Patients',sheetId:0}},{properties:{title:'Notes',sheetId:1}}]
+  });
+  spreadsheetId=created.spreadsheetId;
+  localStorage.setItem('gjc_sheet_id',spreadsheetId);
+  // Write headers
+  await gSheets('PUT','/'+spreadsheetId+'/values/Patients!A1:T1?valueInputOption=RAW',{values:[P_HEADERS]});
+  await gSheets('PUT','/'+spreadsheetId+'/values/Notes!A1:S1?valueInputOption=RAW',{values:[N_HEADERS]});
+}
+
+async function loadFromSheets(){
+  setSyncStatus('busy');
+  try{
+    const [pRes,nRes]=await Promise.all([
+      gSheets('GET','/'+spreadsheetId+'/values/Patients!A1:T10000'),
+      gSheets('GET','/'+spreadsheetId+'/values/Notes!A1:S50000')
+    ]);
+    const pRows=(pRes.values||[]).slice(1);
+    const nRows=(nRes.values||[]).slice(1);
+
+    // Parse notes
+    const notesByPatient={};
+    nRows.forEach(r=>{
+      const note={
+        id:r[0]||uid(),patientId:r[1]||'',date:r[2]||'',type:r[3]||'',synopsis:r[4]||'',
+        s:{complaint:r[5]||'',history:r[6]||'',pain:parseInt(r[7]||5),flags:tryParse(r[8],[])},
+        o:{posture:r[9]||'',rom:r[10]||'',palpation:r[11]||'',steps:tryParse(r[12],[])},
+        a:{impression:r[13]||'',differential:r[14]||''},
+        p:{treatment:r[15]||'',exercises:tryParse(r[16],[]),education:r[17]||'',followup:r[18]||''}
+      };
+      if(!notesByPatient[note.patientId])notesByPatient[note.patientId]=[];
+      notesByPatient[note.patientId].push(note);
+    });
+
+    // Parse patients
+    appState.patients=pRows.filter(r=>r[0]).map(r=>({
+      id:r[0]||'',patientNumber:r[1]||'',name:r[2]||'',preferredName:r[3]||'',
+      email:r[4]||'',phone:r[5]||'',address:r[6]||'',dob:r[7]||'',sex:r[8]||'',
+      referral:r[9]||'',gp:r[10]||'',gpPhone:r[11]||'',medAlert:r[12]||'',
+      occupation:r[13]||'',employer:r[14]||'',emergencyName:r[15]||'',
+      emergencyPhone:r[16]||'',emergencyRel:r[17]||'',joined:r[18]||'',lastVisit:r[19]||'',
+      notes:notesByPatient[r[0]]||[]
+    }));
+    setSyncStatus('ok');
+    render();
+  }catch(e){setSyncStatus('err');toast('Sync error: '+e.message,5000);}
+}
+
+function tryParse(s,fallback){try{return s?JSON.parse(s):fallback;}catch{return fallback;}}
+
+async function savePatientToSheet(patient){
+  setSyncStatus('busy');
+  try{
+    // Check if patient exists in sheet
+    const res=await gSheets('GET','/'+spreadsheetId+'/values/Patients!A:A');
+    const ids=(res.values||[]).flat();
+    const rowIdx=ids.indexOf(patient.id);
+    const row=[patient.id,patient.patientNumber,patient.name,patient.preferredName,patient.email,patient.phone,patient.address,patient.dob,patient.sex,patient.referral,patient.gp,patient.gpPhone,patient.medAlert,patient.occupation,patient.employer,patient.emergencyName,patient.emergencyPhone,patient.emergencyRel,patient.joined,patient.lastVisit];
+    if(rowIdx>0){
+      await gSheets('PUT','/'+spreadsheetId+'/values/Patients!A'+rowIdx+':T'+rowIdx+'?valueInputOption=RAW',{values:[row]});
+    }else{
+      await gSheets('POST','/'+spreadsheetId+'/values/Patients!A:T:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{values:[row]});
+    }
+    setSyncStatus('ok');
+  }catch(e){setSyncStatus('err');toast('Save error: '+e.message,5000);}
+}
+
+async function saveNoteToSheet(note){
+  setSyncStatus('busy');
+  try{
+    const row=[note.id,note.patientId,note.date,note.type,note.synopsis,note.s.complaint,note.s.history,note.s.pain,JSON.stringify(note.s.flags),note.o.posture,note.o.rom,note.o.palpation,JSON.stringify(note.o.steps),note.a.impression,note.a.differential,note.p.treatment,JSON.stringify(note.p.exercises),note.p.education,note.p.followup];
+    await gSheets('POST','/'+spreadsheetId+'/values/Notes!A:S:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{values:[row]});
+    setSyncStatus('ok');
+  }catch(e){setSyncStatus('err');toast('Save error: '+e.message,5000);}
+}
+
+async function saveBatchPatients(patients){
+  setSyncStatus('busy');
+  try{
+    const rows=patients.map(p=>[p.id,p.patientNumber,p.name,p.preferredName,p.email,p.phone,p.address,p.dob,p.sex,p.referral,p.gp,p.gpPhone,p.medAlert,p.occupation,p.employer,p.emergencyName,p.emergencyPhone,p.emergencyRel,p.joined,p.lastVisit]);
+    // Clear existing patient data (keep header)
+    await gSheets('PUT','/'+spreadsheetId+'/values/Patients!A2:T10000?valueInputOption=RAW',{values:[[]]});
+    if(rows.length>0){
+      // Split into chunks of 500
+      for(let i=0;i<rows.length;i+=500){
+        const chunk=rows.slice(i,i+500);
+        await gSheets('POST','/'+spreadsheetId+'/values/Patients!A:T:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{values:chunk});
+        toast('Saving patients... '+(i+chunk.length)+' of '+rows.length);
+      }
+    }
+    setSyncStatus('ok');
+    toast('✓ '+patients.length+' patients saved to Google Sheets');
+  }catch(e){setSyncStatus('err');toast('Batch save error: '+e.message,5000);}
+}
+
+function setSyncStatus(s){
+  syncStatus=s;
+  const el=document.getElementById('sync-indicator');
+  if(el){
+    const dot=el.querySelector('.sync-dot');
+    const txt=el.querySelector('.sync-txt');
+    if(dot){dot.className='sync-dot '+(s==='ok'?'ok':s==='busy'?'busy':'err');}
+    if(txt){txt.textContent=s==='ok'?'Synced':s==='busy'?'Saving...':'Sync error';}
+  }
+}
+
+// ── JANEAPP PARSER ────────────────────────────────────────────────
+function parseJane(arrayBuffer){
+  const wb=XLSX.read(arrayBuffer,{type:'array'});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+  return rows.filter(r=>String(r['Active']||'').toLowerCase()==='true'&&!r['Discharged At']).map(r=>{
+    const phone=String(r['Mobile Phone']||r['Home Phone']||r['Work Phone']||'').trim();
+    const addr=[r['Street Address'],r['Street Address 2'],r['City'],r['Province'],r['Postal']].filter(x=>x&&String(x).trim()).map(x=>String(x).trim()).join(', ');
+    return{
+      id:String(r['patient_guid']||r['Patient Number']||uid()),
+      patientNumber:String(r['Patient Number']||''),
+      name:(String(r['First Name']||'').trim()+' '+String(r['Last Name']||'').trim()).trim(),
+      preferredName:String(r['Preferred Name']||'').trim(),
+      email:String(r['Email']||'').trim(),phone,address:addr,
+      dob:r['Birth Date']?String(r['Birth Date']).split(' ')[0]:'',
+      sex:String(r['Sex']||r['Gender']||'').trim(),
+      referral:String(r['Referral Source']||'').trim(),
+      gp:String(r['Family Doctor']||'').trim(),
+      gpPhone:String(r['Family Doctor Phone']||'').trim(),
+      medAlert:String(r['Medical Alert']||'').trim(),
+      occupation:String(r['Occupation']||'').trim(),
+      employer:String(r['Employer']||'').trim(),
+      emergencyName:String(r['Emergency Contact Name']||'').trim(),
+      emergencyPhone:String(r['Emergency Contact Phone']||'').trim(),
+      emergencyRel:String(r['Emergency Contact Relationship']||'').trim(),
+      joined:r['First Visit']?String(r['First Visit']).split(' ')[0]:'',
+      lastVisit:r['Last Visit']?String(r['Last Visit']).split(' ')[0]:'',
+      notes:[],imported:true
+    };
+  });
+}
+
+// ── GOOGLE AUTH ───────────────────────────────────────────────────
+function initAuth(){
+  if(typeof google==='undefined'){setTimeout(initAuth,200);return;}
+  tokenClient=google.accounts.oauth2.initTokenClient({
+    client_id:CLIENT_ID,scope:SCOPES,
+    callback:async(resp)=>{
+      if(resp.error){toast('Sign-in failed: '+resp.error,5000);return;}
+      accessToken=resp.access_token;
+      // Get user info
+      const ui=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+accessToken}}).then(r=>r.json());
+      userInfo=ui;
+      toast('Signed in as '+ui.email);
+      await findOrCreateSheet();
+      await loadFromSheets();
+    }
+  });
+  render();
+}
+
+function signIn(){tokenClient.requestAccessToken({prompt:''});}
+function signOut(){
+  if(typeof google!=='undefined')google.accounts.oauth2.revoke(accessToken,()=>{});
+  accessToken=null;userInfo=null;spreadsheetId=null;
+  appState={patients:[],screen:'patients',sub:null,selected:null,viewNote:null};
+  render();
+}
+
+// ── AVATAR ────────────────────────────────────────────────────────
+function avatarEl(name,size=36){
+  const bg=['#1B3A6B','#276749','#744210','#553C9A','#086F83','#822727'];
+  const i=(name||'').charCodeAt(0)%bg.length;
+  const d=document.createElement('div');
+  d.style.cssText=`width:${size}px;height:${size}px;border-radius:50%;background:${bg[i]};color:#fff;display:flex;align-items:center;justify-content:center;font-size:${Math.round(size*.34)}px;font-weight:600;flex-shrink:0`;
+  d.textContent=initials(name);return d;
+}
+
+// ── LOGIN SCREEN ──────────────────────────────────────────────────
+function renderLogin(){
+  return `
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#F7F8FA;padding:2rem">
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:2.5rem 2rem;width:100%;max-width:380px;text-align:center">
+      <div style="width:52px;height:52px;background:#1B3A6B;border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 1.25rem">
+        <svg width="26" height="26" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      </div>
+      <div style="font-size:11px;color:#718096;font-weight:600;letter-spacing:.06em;margin-bottom:4px">GARY JONES CHIROPRACTIC</div>
+      <div style="font-size:22px;font-weight:700;margin-bottom:6px">Practice Manager</div>
+      <div style="font-size:13px;color:#718096;margin-bottom:2rem">GCC-compliant clinical records · Secured by Google</div>
+      <button onclick="signIn()" class="btn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:10px;padding:11px 18px;font-size:15px;margin-bottom:14px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/></svg>
+        Sign in with Google
+      </button>
+      <div style="font-size:12px;color:#718096;padding:10px 12px;background:#F7F8FA;border-radius:8px;line-height:1.5">
+        🔒 Your data is stored in your own Google Drive — never on third-party servers.
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── SIDEBAR ───────────────────────────────────────────────────────
+function sidebarEl(){
+  const d=document.createElement('div');
+  d.style.cssText='width:220px;background:#1B3A6B;display:flex;flex-direction:column;min-height:100vh;flex-shrink:0';
+  d.innerHTML=`
+    <div style="padding:1.25rem 1rem .75rem">
+      <div style="font-size:10px;color:rgba(255,255,255,.4);letter-spacing:.08em;font-weight:600;margin-bottom:3px">GARY JONES CHIROPRACTIC</div>
+      <div style="font-size:15px;color:#fff;font-weight:700">Practice Manager</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.35);margin-top:2px">GCC Compliant</div>
+    </div>
+    <div style="flex:1;padding:4px 8px">
+      <div class="ni on">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span style="flex:1">Patients</span>
+        <span style="background:rgba(255,255,255,.15);color:rgba(255,255,255,.8);border-radius:20px;padding:1px 7px;font-size:12px">${appState.patients.length}</span>
+      </div>
+    </div>
+    <div style="padding:.75rem 1rem;border-top:1px solid rgba(255,255,255,.1)">
+      <div id="sync-indicator" style="display:flex;align-items:center;margin-bottom:10px;font-size:12px;color:rgba(255,255,255,.5)">
+        <span class="sync-dot ${syncStatus==='ok'?'ok':syncStatus==='busy'?'busy':'err'}"></span>
+        <span class="sync-txt">${syncStatus==='ok'?'Synced':syncStatus==='busy'?'Saving...':'Not synced'}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        ${userInfo?.picture?`<img src="${userInfo.picture}" style="width:30px;height:30px;border-radius:50%">`:`<div style="width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;font-weight:600">GJ</div>`}
+        <div>
+          <div style="font-size:13px;color:#fff;font-weight:500">${userInfo?.name||'Gary Jones DC'}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.4)">🔒 GCC Registered</div>
+        </div>
+      </div>
+      <button onclick="signOut()" class="btn-o btn-sm" style="width:100%;color:rgba(255,255,255,.6);border-color:rgba(255,255,255,.2);font-size:13px">Sign out</button>
+    </div>`;
+  return d;
+}
+
+// ── PATIENT LIST ──────────────────────────────────────────────────
+function renderPatientList(){
+  const d=document.createElement('div');
+  d.style.cssText='flex:1;display:flex;flex-direction:column;min-height:0';
+  let q='',sort='name';
+
+  function filtered(){
+    let list=appState.patients.filter(p=>{
+      if(!q)return true;const ql=q.toLowerCase();
+      return p.name.toLowerCase().includes(ql)||(p.email||'').toLowerCase().includes(ql)||(p.phone||'').includes(q)||(p.patientNumber||'').includes(q)||(p.address||'').toLowerCase().includes(ql);
+    });
+    if(sort==='name')list=[...list].sort((a,b)=>a.name.localeCompare(b.name));
+    else if(sort==='recent')list=[...list].sort((a,b)=>(b.lastVisit||'').localeCompare(a.lastVisit||''));
+    return list;
+  }
+
+  function draw(){
+    d.innerHTML='';
+    const header=document.createElement('div');
+    header.style.cssText='padding:1.25rem 1.5rem .75rem;border-bottom:1px solid #E2E8F0;background:#fff;display:flex;align-items:center;gap:12px;flex-wrap:wrap';
+    header.innerHTML=`
+      <div style="flex:1"><div style="font-size:18px;font-weight:700">Patients</div><div style="font-size:13px;color:#718096">${appState.patients.length} active records</div></div>
+      <button onclick="setSub('import')" class="btn-o btn-sm">⬆ Import Janeapp</button>
+      <button onclick="setSub('newPatient')" class="btn btn-sm">+ New patient</button>`;
+    d.appendChild(header);
+
+    const controls=document.createElement('div');
+    controls.style.cssText='padding:10px 1.5rem;border-bottom:1px solid #E2E8F0;background:#fff;display:flex;gap:10px;align-items:center';
+    controls.innerHTML=`
+      <input id="pt-search" placeholder="Search name, email, phone, patient number..." value="${q}" style="max-width:420px">
+      <select id="pt-sort" style="width:auto;min-width:150px">
+        <option value="name" ${sort==='name'?'selected':''}>Sort: A–Z</option>
+        <option value="recent" ${sort==='recent'?'selected':''}>Sort: Recent visit</option>
+      </select>`;
+    d.appendChild(controls);
+    controls.querySelector('#pt-search').addEventListener('input',e=>{q=e.target.value;draw();});
+    controls.querySelector('#pt-sort').addEventListener('change',e=>{sort=e.target.value;draw();});
+
+    const list=document.createElement('div');
+    list.style.cssText='flex:1;overflow-y:auto;background:#fff';
+    const pts=filtered();
+    if(appState.patients.length===0){
+      list.innerHTML=`<div style="padding:3rem;text-align:center"><div style="font-size:40px;margin-bottom:12px">📋</div><div style="font-size:16px;font-weight:600;margin-bottom:6px">No patients yet</div><div style="font-size:14px;color:#718096;margin-bottom:1.25rem">Import your Janeapp export to get started.</div><button onclick="setSub('import')" class="btn">⬆ Import from Janeapp</button></div>`;
+    }else if(pts.length===0){
+      list.innerHTML=`<div style="padding:2rem;text-align:center;color:#718096">No patients match "${q}"</div>`;
+    }else{
+      pts.forEach(p=>{
+        const row=document.createElement('div');
+        row.className='ptrow';
+        row.appendChild(avatarEl(p.name));
+        const info=document.createElement('div');
+        info.style.cssText='flex:1;min-width:0';
+        info.innerHTML=`<div style="font-weight:600;font-size:14px">${p.name}${p.preferredName?`<span style="font-weight:400;color:#718096;font-size:13px"> (${p.preferredName})</span>`:''}</div><div style="font-size:12px;color:#718096;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${[p.phone,p.email].filter(Boolean).join(' · ')}</div>`;
+        const meta=document.createElement('div');
+        meta.style.cssText='text-align:right;flex-shrink:0';
+        meta.innerHTML=`${p.medAlert?`<div style="margin-bottom:3px"><span class="badge b-re" style="font-size:11px">⚠ Alert</span></div>`:''}<div style="font-size:12px;color:#718096">${p.notes.length} note${p.notes.length!==1?'s':''}</div>${p.lastVisit?`<div style="font-size:11px;color:#A0AEC0">${fmtDate(p.lastVisit)}</div>`:''}`;
+        row.appendChild(info);row.appendChild(meta);
+        row.addEventListener('click',()=>selectPatient(p));
+        list.appendChild(row);
+      });
+    }
+    d.appendChild(list);
+  }
+  draw();return d;
+}
+
+// ── IMPORT SCREEN ─────────────────────────────────────────────────
+function renderImport(){
+  const d=document.createElement('div');
+  d.style.cssText='flex:1;overflow-y:auto;padding:1.5rem;max-width:600px';
+  const fileInput=document.createElement('input');
+  fileInput.type='file';fileInput.accept='.xlsx,.xls';fileInput.style.display='none';
+  d.appendChild(fileInput);
+
+  function draw(status,count,err){
+    const existing=appState.patients.length;
+    d.innerHTML='';d.appendChild(fileInput);
+    d.innerHTML+=`
+      <button onclick="setSub(null)" class="btn-o btn-sm" style="margin-bottom:1rem">← Back</button>
+      <div style="font-size:20px;font-weight:700;margin-bottom:6px">Import from Janeapp</div>
+      <div style="font-size:14px;color:#718096;margin-bottom:1.5rem">Upload your Janeapp patient export. Active patients will be imported and saved to your Google Sheet automatically.</div>
+      ${existing>0?`<div style="background:#F0FFF4;border:1px solid #9AE6B4;border-radius:10px;padding:12px 16px;margin-bottom:1.25rem;display:flex;align-items:center;gap:10px"><span style="font-size:18px">✓</span><div><div style="font-weight:600;color:#276749">${existing} patients currently loaded</div><div style="font-size:13px;color:#276749">Upload a new file to replace all records.</div></div></div>`:''}
+      <div class="card" style="margin-bottom:1.25rem">
+        <div class="sec">How to export from Janeapp</div>
+        ${['Reports → List → filter to your name','Click the three dots → Export to Excel','Save the .xlsx file','Upload it below'].map((s,i)=>`<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div style="width:22px;height:22px;border-radius:50%;background:#1B3A6B;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div><span>${s}</span></div>`).join('')}
+      </div>
+      <div class="card" id="upload-area">
+        <div class="sec">Upload patient export (.xlsx)</div>
+        ${status==='done'
+          ?`<div style="text-align:center;padding:1.5rem 0"><div style="font-size:36px;margin-bottom:8px">✓</div><div style="font-size:18px;font-weight:700;color:#276749;margin-bottom:4px">${count} patients imported</div><div style="font-size:14px;color:#718096;margin-bottom:1rem">Saved to your Google Sheet.</div><button onclick="setSub(null)" class="btn">View patients →</button></div>`
+          :`<div id="drop-zone" style="border:2px dashed #CBD5E0;border-radius:10px;padding:2rem;text-align:center;cursor:pointer;background:#F7F8FA">
+              <div style="font-size:32px;margin-bottom:8px">📂</div>
+              ${status==='reading'?`<div style="font-size:14px;color:#718096" id="progress-txt">Reading file...</div>`
+              :`<div><div style="font-weight:600;margin-bottom:4px">Drop your .xlsx file here</div><div style="font-size:13px;color:#718096">or <span style="color:#1B3A6B;text-decoration:underline">click to browse</span></div></div>`}
+            </div>
+            ${err?`<div style="margin-top:10px;padding:10px 12px;background:#FFF5F5;border:1px solid #FC8181;border-radius:8px;font-size:13px;color:#C53030">${err}</div>`:''}`
+        }
+      </div>`;
+
+    if(status!=='done'){
+      const dz=d.querySelector('#drop-zone');
+      if(dz){
+        dz.addEventListener('click',()=>fileInput.click());
+        dz.addEventListener('dragover',e=>e.preventDefault());
+        dz.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f)handleFile(f);});
+      }
+    }
+  }
+
+  async function handleFile(file){
+    draw('reading',0,'');
+    const reader=new FileReader();
+    reader.onload=async ev=>{
+      try{
+        const pts=parseJane(ev.target.result);
+        appState.patients=pts;
+        render();
+        draw('done',pts.length,'');
+        // Save to Sheets
+        await saveBatchPatients(pts);
+      }catch(ex){draw('idle',0,'Could not parse file: '+ex.message);}
+    };
+    reader.onerror=()=>draw('idle',0,'Could not read file.');
+    reader.readAsArrayBuffer(file);
+  }
+
+  fileInput.addEventListener('change',e=>{if(e.target.files[0])handleFile(e.target.files[0]);});
+  draw('idle',0,'');
+  return d;
+}
+
+// ── PATIENT DETAIL ────────────────────────────────────────────────
+function renderPatientDetail(patient){
+  const d=document.createElement('div');
+  d.style.cssText='flex:1;overflow-y:auto;padding:1.5rem';
+
+  const fresh=appState.patients.find(p=>p.id===patient.id)||patient;
+  const a=age(fresh.dob);
+
+  d.innerHTML=`
+    <button onclick="setSub(null);appState.selected=null" class="btn-o btn-sm" style="margin-bottom:1rem">← Back</button>
+    ${fresh.medAlert?`<div style="background:#FFF5F5;border:1px solid #FC8181;border-radius:10px;padding:12px 14px;margin-bottom:1rem;display:flex;gap:10px"><span style="font-size:18px;flex-shrink:0">⚠</span><div><div style="font-weight:600;color:#C53030;font-size:13px;margin-bottom:2px">Medical Alert</div><div style="font-size:14px;color:#C53030">${fresh.medAlert}</div></div></div>`:''}
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.25rem;gap:10px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:14px" id="pt-avatar-area"></div>
+      <button onclick="setSub('newNote')" class="btn">+ New note</button>
+    </div>
+    <div class="g2" style="margin-bottom:1.25rem;gap:14px">
+      <div class="card">
+        <div class="sec">Contact</div>
+        <table style="width:100%;font-size:13px;border-collapse:collapse">
+          ${[['Phone',fresh.phone],['Email',fresh.email],['Address',fresh.address]].filter(([,v])=>v).map(([k,v])=>`<tr><td style="color:#718096;padding-bottom:6px;padding-right:12px;white-space:nowrap;vertical-align:top">${k}</td><td style="padding-bottom:6px">${v}</td></tr>`).join('')}
+        </table>
+      </div>
+      <div class="card">
+        <div class="sec">Clinical</div>
+        <table style="width:100%;font-size:13px;border-collapse:collapse">
+          ${[['GP',fresh.gp],['GP phone',fresh.gpPhone],['Referral',fresh.referral],['First visit',fmtDate(fresh.joined)],['Last visit',fmtDate(fresh.lastVisit)]].filter(([,v])=>v).map(([k,v])=>`<tr><td style="color:#718096;padding-bottom:6px;padding-right:12px;white-space:nowrap;vertical-align:top">${k}</td><td style="padding-bottom:6px">${v}</td></tr>`).join('')}
+        </table>
+      </div>
+    </div>
+    ${fresh.emergencyName?`<div class="card" style="margin-bottom:1.25rem"><div class="sec">Emergency contact</div><div style="font-size:13px">${fresh.emergencyName}${fresh.emergencyRel?' ('+fresh.emergencyRel+')':''}${fresh.emergencyPhone?' — '+fresh.emergencyPhone:''}</div></div>`:''}
+    <div class="card">
+      <div class="sec">Clinical notes (${fresh.notes.length})</div>
+      <div id="notes-list"></div>
+    </div>`;
+
+  // Avatar
+  const avatarArea=d.querySelector('#pt-avatar-area');
+  avatarArea.appendChild(avatarEl(fresh.name,50));
+  const nameDiv=document.createElement('div');
+  nameDiv.innerHTML=`<div style="font-size:20px;font-weight:700">${fresh.name}${fresh.preferredName?`<span style="font-weight:400;color:#718096;font-size:15px;margin-left:6px">(${fresh.preferredName})</span>`:''}</div><div style="font-size:13px;color:#718096;margin-top:2px">${[fresh.dob?'DOB: '+fmtDate(fresh.dob)+(a?' (age '+a+')':''):'',fresh.sex,fresh.occupation].filter(Boolean).join(' · ')}</div>${fresh.patientNumber?`<div style="font-size:12px;color:#A0AEC0;margin-top:1px">Patient #${fresh.patientNumber}</div>`:''}`;
+  avatarArea.appendChild(nameDiv);
+
+  // Notes
+  const notesList=d.querySelector('#notes-list');
+  if(fresh.notes.length===0){
+    notesList.innerHTML=`<div style="font-size:14px;color:#718096;padding:1rem 0">No notes yet. <span style="color:#1B3A6B;cursor:pointer;text-decoration:underline" onclick="setSub('newNote')">Add first note</span>.</div>`;
+  }else{
+    fresh.notes.forEach(n=>{
+      const bc=n.type==='New Patient Visit'?'b-bl':n.type==='Standard Treatment'?'b-gr':'b-am';
+      const nc=document.createElement('div');nc.className='nc';
+      nc.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><div style="display:flex;align-items:center;gap:8px"><span class="badge ${bc}">${n.type}</span><span style="font-size:12px;color:#718096">${fmtDate(n.date)}</span></div><span style="font-size:12px;color:#718096">View →</span></div><div style="font-size:13px;line-height:1.6;color:#4A5568">${n.synopsis}</div>${n.s.flags.length>0?`<div style="margin-top:6px;font-size:12px;color:#C53030;font-weight:500">⚠ Red flags: ${n.s.flags.join(', ')}</div>`:''}`;
+      nc.addEventListener('click',()=>{appState.viewNote=n;setSub('viewNote');});
+      notesList.appendChild(nc);
+    });
+  }
+  return d;
+}
+
+// ── NOTE VIEW ─────────────────────────────────────────────────────
+function renderNoteView(note){
+  const d=document.createElement('div');
+  d.style.cssText='flex:1;overflow-y:auto;padding:1.5rem';
+  const bc=note.type==='New Patient Visit'?'b-bl':note.type==='Standard Treatment'?'b-gr':'b-am';
+  const exLabels=EXERCISES.filter(e=>note.p.exercises.includes(e.id)).map(e=>e.label);
+  d.innerHTML=`
+    <button onclick="setSub('detail')" class="btn-o btn-sm" style="margin-bottom:1rem">← Back to patient</button>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem"><span class="badge ${bc}">${note.type}</span><span style="font-size:14px;color:#718096">${fmtDate(note.date)}</span></div>
+    <div class="card" style="margin-bottom:1rem"><div class="sec">Synopsis</div><div style="font-size:14px;line-height:1.7">${note.synopsis}</div></div>
+    <div class="card" style="margin-bottom:1rem">
+      <div class="sec">S — Subjective</div>
+      <div class="f"><label>Chief complaint</label><div style="font-size:14px">${note.s.complaint||'—'}</div></div>
+      <div class="f"><label>History</label><div style="font-size:14px;line-height:1.6">${note.s.history||'—'}</div></div>
+      <div class="f"><label>Pain scale</label><div style="font-size:14px">${note.s.pain}/10</div></div>
+      ${note.s.flags.length>0?`<div style="background:#FFF5F5;border:1px solid #FC8181;border-radius:8px;padding:10px 12px"><div style="font-size:13px;font-weight:600;color:#C53030;margin-bottom:4px">Red flags — duty of candour applies</div>${note.s.flags.map(f=>`<div style="font-size:13px;color:#C53030;font-weight:500">⚠ ${f}</div>`).join('')}</div>`:''}
+    </div>
+    <div class="card" style="margin-bottom:1rem">
+      <div class="sec">O — Objective</div>
+      <div class="f"><label>Postural observation</label><div style="font-size:14px">${note.o.posture||'—'}</div></div>
+      <div class="f"><label>Range of movement</label><div style="font-size:14px">${note.o.rom||'—'}</div></div>
+      <div class="f"><label>Palpation</label><div style="font-size:14px">${note.o.palpation||'—'}</div></div>
+      <label style="margin-bottom:8px">McTimoney protocol — areas assessed</label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${note.o.steps.map(s=>`<span class="badge b-bl">${s}</span>`).join('')}</div>
+    </div>
+    <div class="card" style="margin-bottom:1rem">
+      <div class="sec">A — Assessment</div>
+      <div class="f"><label>Clinical impression</label><div style="font-size:14px">${note.a.impression||'—'}</div></div>
+      ${note.a.differential?`<div class="f"><label>Differential / notes</label><div style="font-size:14px">${note.a.differential}</div></div>`:''}
+    </div>
+    <div class="card">
+      <div class="sec">P — Plan</div>
+      <div class="f"><label>Treatment delivered</label><div style="font-size:14px">${note.p.treatment||'—'}</div></div>
+      <div class="f"><label>Exercises prescribed</label><div style="font-size:14px">${exLabels.length>0?exLabels.join(', '):'None'}</div></div>
+      <div class="f"><label>Patient education</label><div style="font-size:14px">${note.p.education||'—'}</div></div>
+      <div class="f"><label>Follow-up</label><div style="font-size:14px">${note.p.followup||'—'}</div></div>
+    </div>`;
+  return d;
+}
+
+// ── SOAP FORM ─────────────────────────────────────────────────────
+function renderSOAPForm(patient){
+  let note=initNote();let step=0;
+  const d=document.createElement('div');
+  d.style.cssText='flex:1;overflow-y:auto;padding:1.5rem;max-width:680px';
+  const steps=['Type','Subjective','Objective','Assessment','Plan'];
+
+  function up(obj,k){return e=>obj[k]=e.target.type==='range'?parseInt(e.target.value):e.target.value;}
+  function togFlag(label){note.s.flags=note.s.flags.includes(label)?note.s.flags.filter(f=>f!==label):[...note.s.flags,label];}
+  function togStep(s){note.o.steps=note.o.steps.includes(s)?note.o.steps.filter(x=>x!==s):[...note.o.steps,s];}
+  function togEx(id){note.p.exercises=note.p.exercises.includes(id)?note.p.exercises.filter(x=>x!==id):[...note.p.exercises,id];}
+
+  function draw(){
+    d.innerHTML='';
+    const pct=Math.round((step/4)*100);
+    // Header
+    d.innerHTML=`
+      <button class="btn-o btn-sm" style="margin-bottom:10px" id="back-btn">${step===0?'× Cancel':'← Back'}</button>
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px"><div style="font-size:16px;font-weight:700">${steps[step]}</div><span style="font-size:13px;color:#718096">${patient.name} · ${note.type||'New note'}</span></div>
+      <div class="prog"><div class="progf" style="width:${pct}%"></div></div>
+      <div style="display:flex;gap:6px;margin-bottom:1.25rem">${steps.map((s,i)=>`<span style="font-size:12px;color:${i===step?'#1B3A6B':i<step?'#276749':'#A0AEC0'};font-weight:${i<=step?600:400}">${i>0?'→ ':''}${s}</span>`).join('')}</div>`;
+    document.getElementById('back-btn').addEventListener('click',()=>{if(step===0)setSub('detail');else{step--;draw();}});
+
+    if(step===0){
+      const html=`<div class="card">
+        <div class="f"><label>Date</label><input type="date" id="n-date" value="${note.date}"></div>
+        <div style="margin-bottom:1.25rem"><label style="margin-bottom:8px">Session type</label>
+          ${['New Patient Visit','Free Mini Assessment','Standard Treatment'].map(t=>`<div class="cr${note.type===t?' on':''}" data-type="${t}"><div style="width:18px;height:18px;border-radius:50%;border:2px solid ${note.type===t?'#276749':'#CBD5E0'};background:${note.type===t?'#9AE6B4':'transparent'};flex-shrink:0"></div><span style="font-size:14px">${t}</span></div>`).join('')}
+        </div>
+        <div class="f"><label>Synopsis</label><textarea id="n-synopsis" rows="3" placeholder="Brief summary. End with: Standard McTimoney protocol delivered.">${note.synopsis}</textarea><div style="font-size:11px;color:#718096;margin-top:3px">Must end: Standard McTimoney protocol delivered.</div></div>
+        <div style="display:flex;justify-content:flex-end"><button class="btn" id="next-btn" ${!note.type||!note.synopsis?'disabled':''}>Next: Subjective →</button></div>
+      </div>`;
+      d.innerHTML+=html;
+      d.querySelector('#n-date').addEventListener('change',e=>note.date=e.target.value);
+      d.querySelector('#n-synopsis').addEventListener('input',e=>{note.synopsis=e.target.value;d.querySelector('#next-btn').disabled=!note.type||!note.synopsis;});
+      d.querySelectorAll('[data-type]').forEach(el=>el.addEventListener('click',()=>{note.type=el.dataset.type;draw();}));
+      d.querySelector('#next-btn').addEventListener('click',()=>{step=1;draw();});
+    }
+    else if(step===1){
+      d.innerHTML+=`<div class="card" style="margin-bottom:1rem">
+        <div class="f"><label>Chief complaint</label><textarea id="s-complaint" rows="2" placeholder="Patient's primary complaint...">${note.s.complaint}</textarea></div>
+        <div class="f"><label>History of complaint</label><textarea id="s-history" rows="3" placeholder="Onset, duration, aggravating/relieving factors...">${note.s.history}</textarea></div>
+        <div class="f"><label>Pain scale — <span id="pain-val">${note.s.pain}</span>/10</label><input type="range" id="s-pain" min="0" max="10" step="1" value="${note.s.pain}" style="padding:0;border:none;box-shadow:none;background:transparent"></div>
+      </div>
+      <div class="card" style="margin-bottom:1rem">
+        <div class="sec">Red flag screening</div>
+        <div style="font-size:12px;color:#718096;margin-bottom:10px">Select any that apply — flagged items appear bolded in the note.</div>
+        ${RED_FLAGS.map(f=>`<div class="fr${note.s.flags.includes(f.label)?' on':''}" data-flag="${f.label}"><input type="checkbox" ${note.s.flags.includes(f.label)?'checked':''} style="width:14px;height:14px;flex-shrink:0;margin-top:1px;cursor:pointer"><span style="font-size:13px;color:${note.s.flags.includes(f.label)?'#C53030':'inherit'}">${f.label}${f.critical?' ⚠':''}</span></div>`).join('')}
+        ${note.s.flags.length>0?`<div style="margin-top:10px;padding:10px 12px;background:#FFF5F5;border:1px solid #FC8181;border-radius:8px;font-size:13px;color:#C53030;font-weight:500">⚠ Red flags noted. Duty of candour applies.</div>`:''}
+      </div>
+      <div style="display:flex;justify-content:flex-end"><button class="btn" id="next-btn">Next: Objective →</button></div>`;
+      d.querySelector('#s-complaint').addEventListener('input',e=>note.s.complaint=e.target.value);
+      d.querySelector('#s-history').addEventListener('input',e=>note.s.history=e.target.value);
+      d.querySelector('#s-pain').addEventListener('input',e=>{note.s.pain=parseInt(e.target.value);d.querySelector('#pain-val').textContent=note.s.pain;});
+      d.querySelectorAll('[data-flag]').forEach(el=>el.addEventListener('click',()=>{togFlag(el.dataset.flag);draw();}));
+      d.querySelector('#next-btn').addEventListener('click',()=>{step=2;draw();});
+    }
+    else if(step===2){
+      d.innerHTML+=`<div class="card" style="margin-bottom:1rem">
+        <div class="f"><label>Postural observation</label><textarea id="o-posture" rows="2" placeholder="Pelvic tilt, shoulder height, C-curve, upper crossed syndrome...">${note.o.posture}</textarea></div>
+        <div class="f"><label>Range of movement</label><textarea id="o-rom" rows="2" placeholder="Flexion, extension, lateral flexion, rotation — note restrictions...">${note.o.rom}</textarea></div>
+        <div class="f"><label>Palpation findings</label><textarea id="o-palp" rows="2" placeholder="Tenderness, hypertonicity, segmental findings...">${note.o.palpation}</textarea></div>
+      </div>
+      <div class="card" style="margin-bottom:1rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div class="sec" style="margin:0">McTimoney 24-step protocol</div>
+          <button class="btn-o btn-sm" id="select-all">Select all</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          ${STEPS.map(s=>`<div class="cr${note.o.steps.includes(s)?' on':''}" data-step="${s}"><input type="checkbox" ${note.o.steps.includes(s)?'checked':''} style="width:14px;height:14px;flex-shrink:0;cursor:pointer"><span style="font-size:13px">${s}</span></div>`).join('')}
+        </div>
+        <div style="font-size:12px;color:#718096;margin-top:8px" id="step-count">${note.o.steps.length} of ${STEPS.length} areas documented</div>
+      </div>
+      <div style="display:flex;justify-content:flex-end"><button class="btn" id="next-btn">Next: Assessment →</button></div>`;
+      d.querySelector('#o-posture').addEventListener('input',e=>note.o.posture=e.target.value);
+      d.querySelector('#o-rom').addEventListener('input',e=>note.o.rom=e.target.value);
+      d.querySelector('#o-palp').addEventListener('input',e=>note.o.palpation=e.target.value);
+      d.querySelector('#select-all').addEventListener('click',()=>{note.o.steps=[...STEPS];draw();});
+      d.querySelectorAll('[data-step]').forEach(el=>el.addEventListener('click',()=>{togStep(el.dataset.step);draw();}));
+      d.querySelector('#next-btn').addEventListener('click',()=>{step=3;draw();});
+    }
+    else if(step===3){
+      d.innerHTML+=`<div class="card" style="margin-bottom:1rem">
+        <div class="f"><label>Clinical impression</label><textarea id="a-imp" rows="3" placeholder="Diagnosis, dysfunction pattern, aetiology...">${note.a.impression}</textarea></div>
+        <div class="f"><label>Differential / additional notes</label><textarea id="a-diff" rows="2" placeholder="Rule-outs, referral considerations...">${note.a.differential}</textarea></div>
+      </div>
+      <div style="display:flex;justify-content:flex-end"><button class="btn" id="next-btn">Next: Plan →</button></div>`;
+      d.querySelector('#a-imp').addEventListener('input',e=>note.a.impression=e.target.value);
+      d.querySelector('#a-diff').addEventListener('input',e=>note.a.differential=e.target.value);
+      d.querySelector('#next-btn').addEventListener('click',()=>{step=4;draw();});
+    }
+    else if(step===4){
+      d.innerHTML+=`<div class="card" style="margin-bottom:1rem">
+        <div class="f"><label>Treatment delivered</label><textarea id="p-treat" rows="2" placeholder="Adjustments, regions treated, techniques...">${note.p.treatment}</textarea></div>
+        <div style="margin-bottom:1rem">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><label style="margin:0">Exercises prescribed</label><button class="btn-o btn-sm" id="all-ex">All four</button></div>
+          ${EXERCISES.map(e=>`<div class="cr${note.p.exercises.includes(e.id)?' on':''}" data-ex="${e.id}"><input type="checkbox" ${note.p.exercises.includes(e.id)?'checked':''} style="width:14px;height:14px;flex-shrink:0;cursor:pointer"><span style="font-size:13px">${e.label}</span></div>`).join('')}
+        </div>
+        <div class="f"><label>Patient education given</label><textarea id="p-edu" rows="2" placeholder="Postural advice, ergonomics, C-curve, upper crossed syndrome...">${note.p.education}</textarea></div>
+        <div class="f"><label>Follow-up plan</label><input id="p-fu" value="${note.p.followup}" placeholder="e.g. Review in 2 weeks"></div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn-o" id="cancel-btn">Cancel</button>
+        <button class="btn" id="save-btn">✓ Save note</button>
+      </div>`;
+      d.querySelector('#p-treat').addEventListener('input',e=>note.p.treatment=e.target.value);
+      d.querySelector('#p-edu').addEventListener('input',e=>note.p.education=e.target.value);
+      d.querySelector('#p-fu').addEventListener('input',e=>note.p.followup=e.target.value);
+      d.querySelector('#all-ex').addEventListener('click',()=>{note.p.exercises=EXERCISES.map(e=>e.id);draw();});
+      d.querySelectorAll('[data-ex]').forEach(el=>el.addEventListener('click',()=>{togEx(el.dataset.ex);draw();}));
+      d.querySelector('#cancel-btn').addEventListener('click',()=>setSub('detail'));
+      d.querySelector('#save-btn').addEventListener('click',async()=>{
+        note.patientId=patient.id;
+        const n={...note,id:uid()};
+        appState.patients=appState.patients.map(p=>p.id===patient.id?{...p,notes:[n,...p.notes]}:p);
+        appState.selected=appState.patients.find(p=>p.id===patient.id);
+        setSub('detail');
+        toast('Note saved ✓');
+        await saveNoteToSheet(n);
+      });
+    }
+  }
+  draw();return d;
+}
+
+// ── NEW PATIENT FORM ──────────────────────────────────────────────
+function renderNewPatient(){
+  let f={name:'',dob:'',phone:'',email:'',address:'',occupation:'',gp:'',referral:'',medAlert:''};
+  const d=document.createElement('div');
+  d.style.cssText='flex:1;overflow-y:auto;padding:1.5rem;max-width:620px';
+  function draw(){
+    const valid=f.name&&f.dob&&f.phone;
+    d.innerHTML=`
+      <button onclick="setSub(null)" class="btn-o btn-sm" style="margin-bottom:1rem">← Cancel</button>
+      <div style="font-size:18px;font-weight:700;margin-bottom:1.25rem">New patient registration</div>
+      <div class="card" style="margin-bottom:1rem">
+        <div class="sec">Personal details</div>
+        <div class="g2">
+          <div class="f"><label>Full name *</label><input id="f-name" value="${f.name}" placeholder="First and last name"></div>
+          <div class="f"><label>Date of birth *</label><input type="date" id="f-dob" value="${f.dob}"></div>
+          <div class="f"><label>Phone *</label><input id="f-phone" value="${f.phone}" placeholder="07..."></div>
+          <div class="f"><label>Email</label><input type="email" id="f-email" value="${f.email}"></div>
+        </div>
+        <div class="f"><label>Address</label><input id="f-addr" value="${f.address}" placeholder="Street, town, postcode"></div>
+        <div class="g2">
+          <div class="f"><label>Occupation</label><input id="f-occ" value="${f.occupation}"></div>
+          <div class="f"><label>Referral source</label><input id="f-ref" value="${f.referral}" placeholder="GP, recommendation, web..."></div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:1rem">
+        <div class="sec">Medical</div>
+        <div class="f"><label>GP / surgery</label><input id="f-gp" value="${f.gp}" placeholder="Dr Name, Surgery name"></div>
+        <div class="f"><label>Medical alerts / contraindications</label><textarea id="f-med" rows="3" placeholder="Current medications, history, contraindications...">${f.medAlert}</textarea></div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button onclick="setSub(null)" class="btn-o">Cancel</button>
+        <button class="btn" id="save-pt" ${valid?'':'disabled'}>Register patient</button>
+      </div>`;
+    ['name','dob','phone','email','address','occupation','referral','gp'].forEach(k=>{
+      const el=d.querySelector('#f-'+k.replace('address','addr').replace('occupation','occ').replace('referral','ref'));
+      if(el)el.addEventListener('input',e=>{f[k]=e.target.value;d.querySelector('#save-pt').disabled=!(f.name&&f.dob&&f.phone);});
+    });
+    d.querySelector('#f-med').addEventListener('input',e=>f.medAlert=e.target.value);
+    d.querySelector('#save-pt').addEventListener('click',async()=>{
+      const np={...f,id:uid(),patientNumber:'',notes:[],joined:new Date().toISOString().split('T')[0],lastVisit:'',sex:'',preferredName:'',email:f.email,phone:f.phone,address:f.address,gpPhone:'',employer:'',emergencyName:'',emergencyPhone:'',emergencyRel:''};
+      appState.patients=[np,...appState.patients];
+      appState.selected=np;
+      setSub('detail');
+      toast('Patient registered ✓');
+      await savePatientToSheet(np);
+    });
+  }
+  draw();return d;
+}
+
+// ── ROUTER ────────────────────────────────────────────────────────
+function setSub(s){appState.sub=s;render();}
+function selectPatient(p){appState.selected=appState.patients.find(x=>x.id===p.id)||p;appState.sub='detail';render();}
+
+function render(){
+  const app=document.getElementById('app');
+  if(!accessToken){app.innerHTML=renderLogin();return;}
+
+  app.innerHTML='';
+  app.style.cssText='display:flex;min-height:100vh';
+
+  const sidebar=sidebarEl();
+  app.appendChild(sidebar);
+
+  const main=document.createElement('div');
+  main.style.cssText='flex:1;display:flex;flex-direction:column;min-height:100vh;min-width:0';
+
+  let content;
+  const sub=appState.sub;
+  const sel=appState.selected;
+
+  if(sub==='import') content=renderImport();
+  else if(sub==='newPatient') content=renderNewPatient();
+  else if(sub==='newNote'&&sel) content=renderSOAPForm(sel);
+  else if(sub==='viewNote'&&appState.viewNote) content=renderNoteView(appState.viewNote);
+  else if(sub==='detail'&&sel) content=renderPatientDetail(sel);
+  else content=renderPatientList();
+
+  const contentWrap=document.createElement('div');
+  contentWrap.style.cssText='flex:1;display:flex;overflow-y:auto';
+  contentWrap.appendChild(content);
+  main.appendChild(contentWrap);
+  app.appendChild(main);
+}
+
+// ── BOOT ──────────────────────────────────────────────────────────
+window.addEventListener('load',initAuth);
+</script>
+</body>
+</html>
